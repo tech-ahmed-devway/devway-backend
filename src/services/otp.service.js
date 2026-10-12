@@ -34,6 +34,17 @@ const createVerificationOtp = (email, registrationData, ttlMinutes = 15) => {
 };
 
 /**
+ * Retrieve pending registration data if exists
+ * @param {string} email
+ */
+const getPendingRegistration = (email) => {
+  const normalizedEmail = email.trim().toLowerCase();
+  const record = otpStore.get(`verify:${normalizedEmail}`);
+  if (!record || Date.now() > record.expiresAt) return null;
+  return record.data;
+};
+
+/**
  * Verify Registration OTP
  * @param {string} email
  * @param {string} inputCode
@@ -110,6 +121,7 @@ const verifyPasswordResetOtp = (email, inputCode, keepRecord = false) => {
 
 module.exports = {
   createVerificationOtp,
+  getPendingRegistration,
   verifyRegistrationOtp,
   createPasswordResetOtp,
   verifyPasswordResetOtp

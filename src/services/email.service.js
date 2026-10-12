@@ -1,8 +1,12 @@
 // src/services/email.service.js
-const nodemailer = require('nodemailer');
-const env = require('../config/env');
+const nodemailer = require("nodemailer");
+const env = require("../config/env");
 
 let transporter = null;
+
+// --------------------------------------------------
+// SMTP
+// --------------------------------------------------
 
 const isConfigured = () => {
   const { user, pass } = env.smtp;
@@ -14,170 +18,326 @@ const getTransporter = () => {
 
   const { host, port, user, pass } = env.smtp;
 
-  if (user && pass) {
-    const isGmail = host.includes('gmail');
-    transporter = nodemailer.createTransport({
-      host: isGmail ? 'smtp.gmail.com' : host,
-      port: Number(port) || 465,
-      secure: Number(port) === 465,
-      pool: true,
-      maxConnections: 5,
-      maxMessages: 100,
-      auth: { user, pass }
-    });
-  }
+  if (!user || !pass) return null;
+
+  const smtpHost = String(host || "");
+  const smtpPort = Number(port) || 465;
+  const isGmail = /gmail\.com$/i.test(smtpHost);
+
+  transporter = nodemailer.createTransport({
+    host: isGmail ? "smtp.gmail.com" : smtpHost,
+    port: smtpPort,
+    secure: smtpPort === 465,
+    pool: true,
+    maxConnections: 5,
+    maxMessages: 100,
+    auth: { user, pass },
+  });
 
   return transporter;
 };
 
-/**
- * Base email layout wrapper with GDGoC DevWay identity
- */
-const renderEmailLayout = ({ title, preheader, content }) => {
-  return `
-<!DOCTYPE html>
-<html dir="rtl" lang="ar">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title}</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
-    body {
-      margin: 0;
-      padding: 0;
-      background-color: #f8f9fa;
-      font-family: 'Cairo', Arial, sans-serif;
-      color: #202124;
-      line-height: 1.6;
-      direction: rtl;
-      text-align: right;
-    }
-    .container {
-      max-width: 580px;
-      margin: 30px auto;
-      background: #ffffff;
-      border-radius: 20px;
-      overflow: hidden;
-      border: 1px solid #dadce0;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-    }
-    .header {
-      padding: 28px 32px 20px;
-      border-bottom: 1px solid #f1f3f4;
-      text-align: center;
-    }
-    .dots {
-      display: inline-flex;
-      gap: 6px;
-      margin-bottom: 12px;
-    }
-    .dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      display: inline-block;
-    }
-    .dot-blue { background-color: #4285F4; }
-    .dot-red { background-color: #EA4335; }
-    .dot-yellow { background-color: #FBBC04; }
-    .dot-green { background-color: #34A853; }
-    .brand-title {
-      font-size: 22px;
-      font-weight: 800;
-      color: #202124;
-      margin: 0;
-    }
-    .brand-sub {
-      font-size: 12px;
-      color: #5f6368;
-      margin-top: 4px;
-    }
-    .body {
-      padding: 32px;
-    }
-    .code-box {
-      background: #f8f9fa;
-      border: 2px dashed #4285F4;
-      border-radius: 16px;
-      padding: 20px;
-      text-align: center;
-      margin: 24px 0;
-    }
-    .code-text {
-      font-size: 36px;
-      font-weight: 800;
-      letter-spacing: 8px;
-      color: #1a73e8;
-      direction: ltr;
-      display: inline-block;
-    }
-    .btn {
-      display: inline-block;
-      background-color: #1a73e8;
-      color: #ffffff !important;
-      padding: 14px 28px;
-      border-radius: 12px;
-      text-decoration: none;
-      font-weight: 700;
-      font-size: 14px;
-      margin-top: 20px;
-    }
-    .footer {
-      background-color: #f8f9fa;
-      padding: 20px 32px;
-      border-top: 1px solid #dadce0;
-      text-align: center;
-      font-size: 12px;
-      color: #5f6368;
-    }
-  </style>
-</head>
-<body>
-  <div style="display:none;font-size:1px;color:#333;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">
-    ${preheader || title}
-  </div>
-  <div class="container">
-    <div class="header">
-      <div class="dots">
-        <span class="dot dot-blue"></span>
-        <span class="dot dot-red"></span>
-        <span class="dot dot-yellow"></span>
-        <span class="dot dot-green"></span>
-      </div>
-      <h1 class="brand-title">DevWay Platform</h1>
-      <p class="brand-sub">مجتمع المطورين والتعلم البرمجي</p>
-    </div>
-    <div class="body">
-      ${content}
-    </div>
-    <div class="footer">
-      <p style="margin: 0 0 6px;">هذه الرسالة تم إرسالها تلقائياً من منصة DevWay.</p>
-      <p style="margin: 0; color: #80868b;">إذا لم تطلب هذه العملية، يمكنك تجاهل هذه الرسالة بأمان.</p>
-    </div>
-  </div>
-</body>
-</html>
+// --------------------------------------------------
+// Safe HTML helpers
+// --------------------------------------------------
+
+const escapeHtml = (value = "") =>
+  String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const ltr = (value) => `
+  <span dir="ltr" style="
+    direction:ltr;
+    unicode-bidi:embed;
+    display:inline-block;
+    text-align:left;
+  ">${escapeHtml(value)}</span>
 `;
+
+const rtlText = (value) => `
+  <span dir="auto" style="
+    direction:inherit;
+    unicode-bidi:embed;
+  ">${escapeHtml(value)}</span>
+`;
+
+const paragraph = (content, extraStyle = "") => `
+  <p style="
+    margin:0 0 16px;
+    font-family:Arial,Tahoma,sans-serif;
+    font-size:14px;
+    line-height:1.9;
+    color:#5F6368;
+    text-align:right;
+    ${extraStyle}
+  ">${content}</p>
+`;
+
+// --------------------------------------------------
+// Shared email layout
+// --------------------------------------------------
+
+const renderEmailLayout = ({ title, preheader, content }) => {
+  const safeTitle = escapeHtml(title);
+  const safePreheader = escapeHtml(preheader || title);
+
+  return `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
+  <meta name="supported-color-schemes" content="light">
+  <title>${safeTitle}</title>
+</head>
+
+<body dir="rtl" style="
+  margin:0;
+  padding:0;
+  background-color:#F1F3F4;
+  font-family:Arial,Tahoma,sans-serif;
+  color:#202124;
+  -webkit-text-size-adjust:100%;
+">
+
+  <div style="
+    display:none;
+    font-size:1px;
+    color:#F1F3F4;
+    line-height:1px;
+    max-height:0;
+    max-width:0;
+    opacity:0;
+    overflow:hidden;
+    mso-hide:all;
+  ">${safePreheader}&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;</div>
+
+  <table role="presentation" width="100%" cellspacing="0"
+    cellpadding="0" border="0" dir="rtl"
+    style="width:100%;background-color:#F1F3F4;">
+    <tr>
+      <td align="center" style="padding:24px 12px;">
+
+        <table role="presentation" width="600" cellspacing="0"
+          cellpadding="0" border="0" dir="rtl"
+          style="
+            width:100%;
+            max-width:600px;
+            background-color:#FFFFFF;
+            border:1px solid #E0E3E7;
+            border-radius:16px;
+            overflow:hidden;
+          ">
+
+          <!-- Brand header -->
+          <tr>
+            <td align="center" style="padding:28px 20px 22px;">
+
+              <table role="presentation" cellspacing="0"
+                cellpadding="0" border="0" align="center">
+                <tr>
+                  <td style="padding:0 3px;">
+                    <span style="display:inline-block;width:9px;height:9px;
+                      background:#4285F4;border-radius:50%;"></span>
+                  </td>
+                  <td style="padding:0 3px;">
+                    <span style="display:inline-block;width:9px;height:9px;
+                      background:#EA4335;border-radius:50%;"></span>
+                  </td>
+                  <td style="padding:0 3px;">
+                    <span style="display:inline-block;width:9px;height:9px;
+                      background:#FBBC04;border-radius:50%;"></span>
+                  </td>
+                  <td style="padding:0 3px;">
+                    <span style="display:inline-block;width:9px;height:9px;
+                      background:#34A853;border-radius:50%;"></span>
+                  </td>
+                </tr>
+              </table>
+
+              <h1 dir="ltr" style="
+                margin:12px 0 4px;
+                font-family:Arial,sans-serif;
+                font-size:26px;
+                line-height:1.3;
+                font-weight:800;
+                letter-spacing:-0.5px;
+                color:#202124;
+              ">DevWay</h1>
+
+              <p style="
+                margin:0;
+                font-family:Arial,Tahoma,sans-serif;
+                font-size:12px;
+                line-height:1.8;
+                color:#5F6368;
+              ">مجتمع المطورين والتعلم البرمجي</p>
+
+            </td>
+          </tr>
+
+          <tr>
+            <td style="height:1px;background:#E8EAED;
+              font-size:0;line-height:0;">&nbsp;</td>
+          </tr>
+
+          <!-- Email content -->
+          <tr>
+            <td dir="rtl" style="
+              padding:32px 28px;
+              font-family:Arial,Tahoma,sans-serif;
+              text-align:right;
+              overflow-wrap:anywhere;
+              word-wrap:break-word;
+            ">
+              ${content}
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td align="center" style="
+              padding:22px 20px;
+              background:#F8F9FA;
+              border-top:1px solid #E8EAED;
+            ">
+              <p style="
+                margin:0 0 8px;
+                font-family:Arial,Tahoma,sans-serif;
+                font-size:12px;
+                line-height:1.8;
+                color:#5F6368;
+              ">تم إرسال هذه الرسالة تلقائيًا من منصة
+                <strong dir="ltr">DevWay</strong>.
+              </p>
+
+              <p style="
+                margin:0;
+                font-family:Arial,Tahoma,sans-serif;
+                font-size:11px;
+                line-height:1.8;
+                color:#80868B;
+              ">لو إنت مطلبتش العملية دي، تقدر تتجاهل الرسالة بأمان.
+              </p>
+
+              <p dir="ltr" style="
+                margin:14px 0 0;
+                font-family:Arial,sans-serif;
+                font-size:11px;
+                color:#9AA0A6;
+              ">DevWay Platform</p>
+            </td>
+          </tr>
+
+        </table>
+
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 };
 
-/**
- * Dispatch an email with live SMTP or developer console fallback
- */
+// --------------------------------------------------
+// Reusable components
+// --------------------------------------------------
+
+const heading = (text) => `
+  <h2 style="
+    margin:0 0 16px;
+    font-family:Arial,Tahoma,sans-serif;
+    font-size:21px;
+    font-weight:700;
+    line-height:1.7;
+    color:#202124;
+    text-align:right;
+  ">${text}</h2>
+`;
+
+const codeBox = ({ label, code, hint }) => `
+  <table role="presentation" width="100%" cellspacing="0"
+    cellpadding="0" border="0" style="
+      width:100%;
+      margin:24px 0;
+      background:#F1F6FE;
+      border:1px solid #D2E3FC;
+      border-radius:12px;
+    ">
+    <tr>
+      <td align="center" style="padding:22px 12px;">
+
+        <p style="
+          margin:0 0 12px;
+          font-family:Arial,Tahoma,sans-serif;
+          font-size:12px;
+          line-height:1.8;
+          color:#5F6368;
+        ">${label}</p>
+
+        <div dir="ltr" style="
+          font-family:Arial,sans-serif;
+          font-size:32px;
+          line-height:1.5;
+          font-weight:800;
+          letter-spacing:6px;
+          color:#1A73E8;
+          text-align:center;
+          overflow-wrap:anywhere;
+        ">${escapeHtml(code)}</div>
+
+        <p style="
+          margin:12px 0 0;
+          font-family:Arial,Tahoma,sans-serif;
+          font-size:12px;
+          line-height:1.8;
+          color:#5F6368;
+        ">${hint}</p>
+
+      </td>
+    </tr>
+  </table>
+`;
+
+const infoBox = (content) => `
+  <table role="presentation" width="100%" cellspacing="0"
+    cellpadding="0" border="0" style="
+      width:100%;
+      margin:20px 0;
+      background:#F8F9FA;
+      border:1px solid #E8EAED;
+      border-radius:12px;
+    ">
+    <tr>
+      <td dir="rtl" style="
+        padding:18px;
+        font-family:Arial,Tahoma,sans-serif;
+        text-align:right;
+      ">${content}</td>
+    </tr>
+  </table>
+`;
+
+// --------------------------------------------------
+// Send email
+// --------------------------------------------------
+
 const sendMail = async ({ to, subject, html }) => {
   const mailClient = getTransporter();
 
   if (!mailClient) {
-    console.error('\n=============================================================');
-    console.error('⚠️ [EMAIL SERVICE WARNING - NO SMTP CREDENTIALS CONFIGURED]');
-    console.error(`➡️ Attempted to send to: ${to}`);
-    console.error(`📌 Subject: ${subject}`);
-    console.error('💡 Please set SMTP_USER and SMTP_PASS in the server environment (Render / .env).');
-    console.error('=============================================================\n');
-    return { 
-      success: false, 
-      simulated: true, 
-      error: 'لم يتم ضبط إعدادات خادم البريد (SMTP_USER / SMTP_PASS) في متغيرات بيئة السيرفر (Render Environment).' 
+    console.error("[Email Service] SMTP credentials are not configured.");
+    console.error(`[Email Service] Recipient: ${to}`);
+    console.error(`[Email Service] Subject: ${subject}`);
+
+    return {
+      success: false,
+      simulated: true,
+      error:
+        "لم يتم ضبط SMTP_USER وSMTP_PASS في إعدادات بيئة السيرفر.",
     };
   }
 
@@ -186,141 +346,306 @@ const sendMail = async ({ to, subject, html }) => {
       from: env.smtp.from,
       to,
       subject,
-      html
+      html,
     });
-    console.log(`[Email Sent] MessageId: ${info.messageId} to ${to}`);
-    return { success: true, messageId: info.messageId };
+
+    console.log(`[Email Sent] MessageId: ${info.messageId}`);
+
+    return {
+      success: true,
+      messageId: info.messageId,
+    };
   } catch (error) {
-    console.error('[Email Send Error]:', error);
-    // Don't crash the request if email delivery fails; report cleanly
-    return { success: false, error: error.message };
+    console.error("[Email Send Error]", error.message);
+
+    return {
+      success: false,
+      error: error.message,
+    };
   }
 };
 
-/**
- * Send Account Verification OTP Email
- */
-const sendVerificationEmail = async ({ email, name, code }) => {
-  const content = `
-    <h2 style="font-size: 20px; font-weight: 700; margin-top: 0; color: #202124;">
-      مرحباً ${name || 'صديقنا المطور'} 👋
-    </h2>
-    <p style="font-size: 14px; color: #5f6368;">
-      شكراً لانضمامك إلى منصة <strong>DevWay</strong>. لتأكيد حسابك وضمان أمان بياناتك، يرجى إدخال رمز التحقق التالي:
-    </p>
-    <div class="code-box">
-      <div style="font-size: 11px; color: #5f6368; margin-bottom: 8px;">رمز التحقق الخاص بك (OTP)</div>
-      <div class="code-text">${code}</div>
-      <div style="font-size: 12px; color: #80868b; margin-top: 8px;">ينتهي خلال 15 دقيقة</div>
-    </div>
-    <p style="font-size: 13px; color: #5f6368;">
-      لا تشارك هذا الرمز مع أي شخص. فريق DevWay لن يطلب منك هذا الرمز أبداً.
-    </p>
-  `;
+// --------------------------------------------------
+// Account verification
+// --------------------------------------------------
 
-  const html = renderEmailLayout({
-    title: 'تأكيد الحساب | DevWay',
-    preheader: `رمز التحقق الخاص بك في DevWay هو ${code}`,
-    content
-  });
+const sendVerificationEmail = async ({ email, name, code }) => {
+  const displayName = name
+    ? `<strong>${escapeHtml(name)}</strong>`
+    : "صديقنا المطور";
+
+  const content = `
+    ${heading("تأكيد حسابك على DevWay")}
+
+    ${paragraph(`أهلًا ${displayName}،`)}
+
+    ${paragraph(
+      `شكرًا لانضمامك إلى ${ltr("DevWay")}. استخدم رمز التحقق
+      التالي لتأكيد حسابك ومتابعة رحلتك على المنصة.`
+    )}
+
+    ${codeBox({
+      label: `رمز التحقق · ${ltr("Verification Code")}`,
+      code,
+      hint: "الرمز صالح لمدة 15 دقيقة.",
+    })}
+
+    ${paragraph(
+      "لأمان حسابك، لا تشارك الرمز مع أي شخص. فريق DevWay لن يطلبه منك.",
+      "font-size:13px;"
+    )}
+  `;
 
   return sendMail({
     to: email,
     subject: `🔐 رمز تأكيد حسابك في DevWay: ${code}`,
-    html
+    headers: {
+      'X-Entity-Ref-ID': `${Date.now()}-${code}`,
+    },
+    html: renderEmailLayout({
+      title: "تأكيد الحساب | DevWay",
+      preheader: `رمز التحقق الخاص بك هو ${code}`,
+      content,
+    }),
   });
 };
 
-/**
- * Send Password Reset OTP Email
- */
-const sendPasswordResetEmail = async ({ email, name, code }) => {
-  const content = `
-    <h2 style="font-size: 20px; font-weight: 700; margin-top: 0; color: #202124;">
-      طلب إعادة تعيين كلمة المرور 🔑
-    </h2>
-    <p style="font-size: 14px; color: #5f6368;">
-      مرحباً ${name || 'المطور'}، لقد تلقينا طلباً لإعادة تعيين كلمة المرور الخاصة بحسابك في منصة <strong>DevWay</strong>.
-    </p>
-    <div class="code-box">
-      <div style="font-size: 11px; color: #5f6368; margin-bottom: 8px;">رمز الاستعادة المؤقت</div>
-      <div class="code-text">${code}</div>
-      <div style="font-size: 12px; color: #80868b; margin-top: 8px;">صالح لمدة 15 دقيقة فقط</div>
-    </div>
-    <p style="font-size: 13px; color: #5f6368;">
-      إذا لم تقم بطلب إعادة تعيين كلمة المرور، يمكنك تجاهل هذا البريد وستظل كلمة المرور الحالية آمنة.
-    </p>
-  `;
+// --------------------------------------------------
+// Password reset
+// --------------------------------------------------
 
-  const html = renderEmailLayout({
-    title: 'إعادة تعيين كلمة المرور | DevWay',
-    preheader: `رمز إعادة تعيين كلمة المرور هو ${code}`,
-    content
-  });
+const sendPasswordResetEmail = async ({ email, name, code }) => {
+  const displayName = name
+    ? `<strong>${escapeHtml(name)}</strong>`
+    : "المطور";
+
+  const content = `
+    ${heading("إعادة تعيين كلمة المرور")}
+
+    ${paragraph(`أهلًا ${displayName}،`)}
+
+    ${paragraph(
+      `تلقينا طلبًا لإعادة تعيين كلمة المرور الخاصة بحسابك على
+      ${ltr("DevWay")}. استخدم الرمز التالي لإكمال العملية.`
+    )}
+
+    ${codeBox({
+      label: `رمز الاستعادة · ${ltr("Password Reset Code")}`,
+      code,
+      hint: "الرمز صالح لمدة 15 دقيقة.",
+    })}
+
+    ${paragraph(
+      "لو إنت مطلبتش إعادة تعيين كلمة المرور، تجاهل الرسالة. كلمة مرورك الحالية لن تتغير بسبب هذا البريد وحده.",
+      "font-size:13px;"
+    )}
+  `;
 
   return sendMail({
     to: email,
     subject: `🔑 رمز إعادة تعيين كلمة المرور في DevWay: ${code}`,
-    html
+    headers: {
+      'X-Entity-Ref-ID': `${Date.now()}-${code}`,
+    },
+    html: renderEmailLayout({
+      title: "إعادة تعيين كلمة المرور | DevWay",
+      preheader: `رمز استعادة كلمة المرور هو ${code}`,
+      content,
+    }),
   });
 };
 
-/**
- * Send Assignment Graded Notification Email
- */
-const sendAssignmentGradedEmail = async ({ email, name, assignmentTitle, grade, maxGrade, feedback }) => {
-  const pct = maxGrade > 0 ? Math.round((Number(grade) / Number(maxGrade)) * 100) : 0;
-  const gradeColor = pct >= 80 ? '#34A853' : (pct >= 50 ? '#FBBC04' : '#EA4335');
+// --------------------------------------------------
+// Assignment graded
+// --------------------------------------------------
+
+const sendAssignmentGradedEmail = async ({
+  email,
+  name,
+  assignmentTitle,
+  grade,
+  maxGrade,
+  feedback,
+}) => {
+  const numericGrade = Number(grade);
+  const numericMaxGrade = Number(maxGrade);
+
+  const validGrades =
+    Number.isFinite(numericGrade) &&
+    Number.isFinite(numericMaxGrade) &&
+    numericMaxGrade > 0;
+
+  const percentage = validGrades
+    ? Math.round((numericGrade / numericMaxGrade) * 100)
+    : null;
+
+  const gradeColor =
+    percentage === null
+      ? "#202124"
+      : percentage >= 80
+        ? "#188038"
+        : percentage >= 50
+          ? "#B06000"
+          : "#D93025";
+
+  const displayName = name
+    ? `<strong>${escapeHtml(name)}</strong>`
+    : "طالبنا العزيز";
+
+  const safeAssignmentTitle = escapeHtml(
+    assignmentTitle || "الواجب"
+  );
+
+  const gradeDisplay = validGrades
+    ? `${escapeHtml(grade)} / ${escapeHtml(maxGrade)}`
+    : "لم يتم تحديد الدرجة";
+
+  const feedbackSection = feedback
+    ? `
+      <tr>
+        <td style="
+          padding-top:16px;
+          border-top:1px solid #E8EAED;
+        ">
+          <p style="
+            margin:0 0 8px;
+            font-family:Arial,Tahoma,sans-serif;
+            font-size:13px;
+            font-weight:700;
+            line-height:1.8;
+            color:#202124;
+          ">ملاحظات المشرف</p>
+
+          <div dir="auto" style="
+            padding:12px;
+            background:#FFFFFF;
+            border:1px solid #E8EAED;
+            border-radius:8px;
+            font-family:Arial,Tahoma,sans-serif;
+            font-size:13px;
+            line-height:1.9;
+            color:#3C4043;
+            text-align:start;
+            white-space:pre-wrap;
+            overflow-wrap:anywhere;
+          ">${escapeHtml(feedback)}</div>
+        </td>
+      </tr>
+    `
+    : "";
 
   const content = `
-    <h2 style="font-size: 20px; font-weight: 700; margin-top: 0; color: #202124;">
-      تم تصحيح واجبك بنجاح! 📝
-    </h2>
-    <p style="font-size: 14px; color: #5f6368;">
-      مرحباً <strong>${name || 'طالبنا العزيز'}</strong>، قام المشرف بمراجعة وتسليم تقييم واجبك:
-    </p>
+    ${heading("تم تقييم واجبك")}
 
-    <div style="background: #f8f9fa; border: 1px solid #dadce0; border-radius: 16px; padding: 20px; margin: 20px 0;">
-      <div style="font-size: 15px; font-weight: 700; color: #202124; margin-bottom: 12px;">
-        📌 ${assignmentTitle}
-      </div>
+    ${paragraph(
+      `أهلًا ${displayName}، تمت مراجعة واجبك على
+      ${ltr("DevWay")} وأصبحت نتيجة التقييم متاحة.`
+    )}
 
-      <div style="display: flex; align-items: baseline; justify-content: space-between; border-top: 1px solid #e8eaed; padding-top: 14px;">
-        <span style="font-size: 13px; color: #5f6368;">الدرجة المستحقة:</span>
-        <span style="font-size: 24px; font-weight: 800; color: ${gradeColor}; direction: ltr;">
-          ${grade} / ${maxGrade}
-        </span>
-      </div>
+    ${infoBox(`
+      <p style="
+        margin:0 0 14px;
+        font-family:Arial,Tahoma,sans-serif;
+        font-size:12px;
+        line-height:1.8;
+        color:#5F6368;
+      ">تفاصيل الواجب · Assignment Details</p>
 
-      ${feedback ? `
-        <div style="margin-top: 16px; border-top: 1px solid #e8eaed; padding-top: 14px;">
-          <div style="font-size: 12px; font-weight: 700; color: #5f6368; margin-bottom: 6px;">
-            💬 ملاحظات وتعليقات المشرف:
-          </div>
-          <p style="font-size: 13px; color: #202124; margin: 0; background: #ffffff; padding: 12px; border-radius: 10px; border: 1px solid #e8eaed; line-height: 1.6;">
-            ${feedback}
-          </p>
-        </div>
-      ` : ''}
-    </div>
+      <p dir="auto" style="
+        margin:0 0 18px;
+        font-family:Arial,Tahoma,sans-serif;
+        font-size:16px;
+        line-height:1.8;
+        font-weight:700;
+        color:#202124;
+        text-align:start;
+        overflow-wrap:anywhere;
+      ">${safeAssignmentTitle}</p>
 
-    <div style="text-align: center; margin-top: 24px;">
-      <a href="https://dev-way.vercel.app/assignments" class="btn">
-        عرض تفاصيل الواجب على المنصة ←
-      </a>
-    </div>
+      <table role="presentation" width="100%" cellspacing="0"
+        cellpadding="0" border="0">
+        <tr>
+          <td style="
+            padding-top:14px;
+            border-top:1px solid #E8EAED;
+            font-family:Arial,Tahoma,sans-serif;
+            font-size:13px;
+            line-height:1.8;
+            color:#5F6368;
+            text-align:right;
+          ">الدرجة المستحقة</td>
+
+          <td dir="ltr" align="left" style="
+            padding-top:14px;
+            border-top:1px solid #E8EAED;
+            font-family:Arial,sans-serif;
+            font-size:23px;
+            line-height:1.5;
+            font-weight:800;
+            color:${gradeColor};
+            text-align:left;
+            white-space:nowrap;
+          ">${gradeDisplay}</td>
+        </tr>
+
+        ${
+          percentage !== null
+            ? `<tr>
+                <td colspan="2" style="
+                  padding-top:8px;
+                  font-family:Arial,Tahoma,sans-serif;
+                  font-size:12px;
+                  line-height:1.8;
+                  color:#5F6368;
+                  text-align:right;
+                ">النسبة المئوية:
+                  <strong dir="ltr">${percentage}%</strong>
+                </td>
+              </tr>`
+            : ""
+        }
+
+        ${feedbackSection}
+      </table>
+    `)}
+
+    ${paragraph(
+      "تقدر تراجع تفاصيل الواجب وملاحظات المشرف من خلال المنصة."
+    )}
+
+    <table role="presentation" cellspacing="0" cellpadding="0"
+      border="0" align="center" style="margin:24px auto 0;">
+      <tr>
+        <td align="center" bgcolor="#1A73E8" style="
+          border-radius:8px;
+          background:#1A73E8;
+        ">
+          <a href="https://dev-way.vercel.app/assignments"
+            target="_blank"
+            style="
+              display:inline-block;
+              padding:14px 24px;
+              font-family:Arial,Tahoma,sans-serif;
+              font-size:14px;
+              line-height:1.5;
+              font-weight:700;
+              color:#FFFFFF;
+              text-decoration:none;
+              border-radius:8px;
+            ">عرض تفاصيل الواجب</a>
+        </td>
+      </tr>
+    </table>
   `;
-
-  const html = renderEmailLayout({
-    title: 'تم تصحيح الواجب | DevWay',
-    preheader: `تم تصحيح واجبك "${assignmentTitle}" وحصلت على ${grade}/${maxGrade}`,
-    content
-  });
 
   return sendMail({
     to: email,
-    subject: `🎯 تم تصحيح واجبك: "${assignmentTitle}" (${grade}/${maxGrade})`,
-    html
+    subject: "تم تقييم واجبك | DevWay",
+    html: renderEmailLayout({
+      title: "تقييم الواجب | DevWay",
+      preheader: "تم تقييم واجبك. يمكنك الآن مراجعة الدرجة والملاحظات.",
+      content,
+    }),
   });
 };
 
@@ -328,5 +653,5 @@ module.exports = {
   isConfigured,
   sendVerificationEmail,
   sendPasswordResetEmail,
-  sendAssignmentGradedEmail
+  sendAssignmentGradedEmail,
 };

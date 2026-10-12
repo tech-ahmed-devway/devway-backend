@@ -138,20 +138,22 @@ const resendVerificationCode = async (req, res, next) => {
       return next(new AppError('هذا الحساب مفعل ومسجل بالفعل، يرجى تسجيل الدخول', 400));
     }
 
-    // Generate new OTP
-    const otpCode = otpService.createVerificationOtp(normalizedEmail, {
-      email: normalizedEmail
-    });
-
     // Check if email service is configured
     if (!emailService.isConfigured()) {
       return next(new AppError('لم يتم ضبط إعدادات خادم البريد (SMTP) على السيرفر.', 500));
     }
 
+    // Retrieve previous pending registration data to preserve password & profile info
+    const pendingData = otpService.getPendingRegistration(normalizedEmail);
+    const registrationPayload = pendingData || { email: normalizedEmail };
+
+    // Generate new OTP with preserved payload
+    const otpCode = otpService.createVerificationOtp(normalizedEmail, registrationPayload);
+
     // Dispatch in background for instant response
     emailService.sendVerificationEmail({
       email: normalizedEmail,
-      name: 'المطور',
+      name: registrationPayload.full_name || 'المطور',
       code: otpCode
     }).catch((err) => {
       console.error('[Resend OTP Error]:', err);

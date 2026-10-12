@@ -24,7 +24,7 @@ const app = express();
    ========================================================= */
 
 const allowedOrigins = [
-  "https://dev-site-six.vercel.app",
+  "https://frontend-gdgoc-mocha.vercel.app",
   "http://localhost:8080",
 ];
 

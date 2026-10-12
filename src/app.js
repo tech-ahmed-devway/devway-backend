@@ -23,7 +23,10 @@ const app = express();
    CORS
    ========================================================= */
 
-const allowedOrigins = ["https://dev-way.vercel.app", "http://localhost:8080"];
+const allowedOrigins = [
+  "https://dev-site-six.vercel.app",
+  "http://localhost:8080",
+];
 
 app.use(
   cors({

@@ -1,0 +1,107 @@
+// src/modules/profiles/profiles.controller.js
+const profilesService = require('./profiles.service');
+const ApiResponse = require('../../utils/ApiResponse');
+const AppError = require('../../utils/AppError');
+const { mapProfileToDTO } = require('../../utils/dtos');
+
+/**
+ * Get all user profiles (admin access only)
+ */
+const getProfiles = async (req, res, next) => {
+  try {
+    const profiles = await profilesService.getAllUserProfiles();
+    
+    const dtos = (profiles || []).map(p => mapProfileToDTO(p));
+    // Format response payload exactly as frontend expects: { profiles: [...] }
+    return res.status(200).json({
+      success: true,
+      profiles: dtos
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Delete a profile (admin access only)
+ */
+const deleteProfile = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // Prevent administrators from deleting themselves via this route
+    if (id === req.user.id) {
+      return next(new AppError('لا يمكنك حذف حسابك الحالي', 400));
+    }
+
+    const deleted = await profilesService.deleteProfile(id);
+    if (!deleted) {
+      return next(new AppError('المستخدم غير موجود', 404));
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'تم حذف المستخدم بنجاح',
+      deleted
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get dashboard statistics for the authenticated user
+ */
+const getDashboardStats = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const stats = await profilesService.getDashboardStats(userId);
+    
+    return res.status(200).json({
+      success: true,
+      data: stats
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get top 3 performers (public or authenticated)
+ */
+const getTopPerformers = async (req, res, next) => {
+  try {
+    const topPerformers = await profilesService.getTopPerformers();
+    return res.status(200).json({
+      success: true,
+      topPerformers
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Update top 3 performers (admin access only)
+ */
+const updateTopPerformers = async (req, res, next) => {
+  try {
+    const { items } = req.body; // array of { rank, user_id, note }
+    const updated = await profilesService.updateTopPerformers(items);
+    return res.status(200).json({
+      success: true,
+      message: 'تم تحديث قائمة أفضل 3 طلاب بنجاح 🏆',
+      topPerformers: updated
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = {
+  getProfiles,
+  deleteProfile,
+  getDashboardStats,
+  getTopPerformers,
+  updateTopPerformers
+};

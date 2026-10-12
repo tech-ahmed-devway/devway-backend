@@ -56,11 +56,15 @@ const register = async (req, res, next) => {
     });
 
     // Send verification email
-    await emailService.sendVerificationEmail({
+    const emailResult = await emailService.sendVerificationEmail({
       email: normalizedEmail,
       name: full_name,
       code: otpCode
     });
+
+    if (!emailResult.success) {
+      return next(new AppError(emailResult.error || 'فشل إرسال رمز التحقق إلى بريدك الإلكتروني', 500));
+    }
 
     return new ApiResponse(200, {
       pendingVerification: true,
@@ -136,11 +140,15 @@ const resendVerificationCode = async (req, res, next) => {
       email: normalizedEmail
     });
 
-    await emailService.sendVerificationEmail({
+    const emailResult = await emailService.sendVerificationEmail({
       email: normalizedEmail,
       name: 'المطور',
       code: otpCode
     });
+
+    if (!emailResult.success) {
+      return next(new AppError(emailResult.error || 'فشل إرسال رمز التحقق', 500));
+    }
 
     return new ApiResponse(200, {
       email: normalizedEmail
@@ -165,11 +173,15 @@ const forgotPassword = async (req, res, next) => {
 
     const resetCode = otpService.createPasswordResetOtp(normalizedEmail);
 
-    await emailService.sendPasswordResetEmail({
+    const emailResult = await emailService.sendPasswordResetEmail({
       email: normalizedEmail,
       name: user.full_name,
       code: resetCode
     });
+
+    if (!emailResult.success) {
+      return next(new AppError(emailResult.error || 'فشل إرسال رمز استعادة كلمة المرور', 500));
+    }
 
     return new ApiResponse(200, {
       email: normalizedEmail

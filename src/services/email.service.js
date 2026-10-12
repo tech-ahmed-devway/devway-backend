@@ -166,14 +166,17 @@ const sendMail = async ({ to, subject, html }) => {
   const mailClient = getTransporter();
 
   if (!mailClient) {
-    console.log('\n=============================================================');
-    console.log('📬 [DEV EMAIL SERVICE SIMULATOR - NO SMTP CREDENTIALS SET]');
-    console.log(`➡️ To: ${to}`);
-    console.log(`📌 Subject: ${subject}`);
-    console.log(`📝 Timestamp: ${new Date().toISOString()}`);
-    console.log('💡 Note: Set SMTP_USER & SMTP_PASS in backend/.env for real delivery.');
-    console.log('=============================================================\n');
-    return { success: true, simulated: true };
+    console.error('\n=============================================================');
+    console.error('⚠️ [EMAIL SERVICE WARNING - NO SMTP CREDENTIALS CONFIGURED]');
+    console.error(`➡️ Attempted to send to: ${to}`);
+    console.error(`📌 Subject: ${subject}`);
+    console.error('💡 Please set SMTP_USER and SMTP_PASS in the server environment (Render / .env).');
+    console.error('=============================================================\n');
+    return { 
+      success: false, 
+      simulated: true, 
+      error: 'لم يتم ضبط إعدادات خادم البريد (SMTP_USER / SMTP_PASS) في متغيرات بيئة السيرفر (Render Environment).' 
+    };
   }
 
   try {

@@ -30,7 +30,7 @@ const generateTokens = (user) => {
 };
 
 /*
-    Handle user registration - Step 1: Send OTP verification code
+    Handle user registration - Direct account creation without OTP
 */
 const register = async (req, res, next) => {
   try {
@@ -47,62 +47,10 @@ const register = async (req, res, next) => {
     const saltRounds = 12;
     const passwordHash = await bcrypt.hash(password, saltRounds);
 
-    // Generate 6-digit OTP code and store registration payload temporarily
-    const otpCode = otpService.createVerificationOtp(normalizedEmail, {
-      full_name,
-      email: normalizedEmail,
-      passwordHash,
-      phone: phone || null
-    });
+    // Create user profile directly in the database
+    const user = await authService.createUser(full_name, normalizedEmail, passwordHash, phone || null);
 
-    // Check if email service is configured
-    if (!emailService.isConfigured()) {
-      return next(new AppError('لم يتم ضبط إعدادات خادم البريد (SMTP) على السيرفر (Render Environment).', 500));
-    }
-
-    // Dispatch verification email in background to eliminate UI wait time
-    emailService.sendVerificationEmail({
-      email: normalizedEmail,
-      name: full_name,
-      code: otpCode
-    }).catch((err) => {
-      console.error('[Verification Email Send Error]:', err);
-    });
-
-    return new ApiResponse(200, {
-      pendingVerification: true,
-      email: normalizedEmail
-    }, 'تم إرسال رمز التحقق (OTP) إلى بريدك الإلكتروني بنجاح').send(res);
-  } catch (error) {
-    next(error);
-  }
-};
-
-/*
-    Handle user registration - Step 2: Verify OTP and create active profile
-*/
-const verifyEmail = async (req, res, next) => {
-  try {
-    const { email, code } = req.body;
-    const normalizedEmail = email.trim().toLowerCase();
-
-    const verificationResult = otpService.verifyRegistrationOtp(normalizedEmail, code);
-    if (!verificationResult.valid) {
-      return next(new AppError(verificationResult.message || 'رمز التحقق غير صالح', 400));
-    }
-
-    const { full_name, passwordHash, phone } = verificationResult.data;
-
-    // Check again to avoid race conditions
-    const existingUser = await authService.findUserByEmail(normalizedEmail);
-    if (existingUser) {
-      return next(new AppError('البريد الإلكتروني مسجل بالفعل', 400));
-    }
-
-    // Create verified profile
-    const user = await authService.createUser(full_name, normalizedEmail, passwordHash, phone);
-
-    // Generate tokens
+    // Generate session tokens
     const tokens = generateTokens(user);
 
     const responseData = {
@@ -118,7 +66,7 @@ const verifyEmail = async (req, res, next) => {
       }
     };
 
-    return new ApiResponse(201, responseData, 'تم التحقق من بريدك الإلكتروني وتفعيل الحساب بنجاح').send(res);
+    return new ApiResponse(201, responseData, 'تم إنشاء الحساب بنجاح').send(res);
   } catch (error) {
     next(error);
   }
@@ -162,73 +110,6 @@ const resendVerificationCode = async (req, res, next) => {
     return new ApiResponse(200, {
       email: normalizedEmail
     }, 'تمت إعادة إرسال رمز التحقق إلى بريدك الإلكتروني بنجاح').send(res);
-  } catch (error) {
-    next(error);
-  }
-};
-
-/*
-    Handle Forgot Password - Step 1: Send Reset OTP Code
-*/
-const forgotPassword = async (req, res, next) => {
-  try {
-    const { email } = req.body;
-    const normalizedEmail = email.trim().toLowerCase();
-
-    const user = await authService.findUserByEmail(normalizedEmail);
-    if (!user) {
-      return next(new AppError('البريد الإلكتروني غير مسجل في المنصة', 404));
-    }
-
-    const resetCode = otpService.createPasswordResetOtp(normalizedEmail);
-
-    // Check if email service is configured
-    if (!emailService.isConfigured()) {
-      return next(new AppError('لم يتم ضبط إعدادات خادم البريد (SMTP) على السيرفر.', 500));
-    }
-
-    // Dispatch reset email in background for instant response
-    emailService.sendPasswordResetEmail({
-      email: normalizedEmail,
-      name: user.full_name,
-      code: resetCode
-    }).catch((err) => {
-      console.error('[Forgot Password Email Error]:', err);
-    });
-
-    return new ApiResponse(200, {
-      email: normalizedEmail
-    }, 'تم إرسال رمز إعادة تعيين كلمة المرور إلى بريدك الإلكتروني').send(res);
-  } catch (error) {
-    next(error);
-  }
-};
-
-/*
-    Handle Reset Password - Step 2: Verify OTP and save new password
-*/
-const resetPassword = async (req, res, next) => {
-  try {
-    const { email, code, new_password } = req.body;
-    const normalizedEmail = email.trim().toLowerCase();
-
-    const verification = otpService.verifyPasswordResetOtp(normalizedEmail, code);
-    if (!verification.valid) {
-      return next(new AppError(verification.message || 'رمز إعادة التعيين غير صالح', 400));
-    }
-
-    const user = await authService.findUserByEmail(normalizedEmail);
-    if (!user) {
-      return next(new AppError('المستخدم غير موجود', 404));
-    }
-
-    // Hash the new password
-    const saltRounds = 12;
-    const newPasswordHash = await bcrypt.hash(new_password, saltRounds);
-
-    await authService.updateUserPassword(normalizedEmail, newPasswordHash);
-
-    return new ApiResponse(200, null, 'تمت إعادة تعيين كلمة المرور بنجاح. يمكنك الآن تسجيل الدخول').send(res);
   } catch (error) {
     next(error);
   }
@@ -335,10 +216,6 @@ const refresh = async (req, res, next) => {
 
 module.exports = {
   register,
-  verifyEmail,
-  resendVerificationCode,
-  forgotPassword,
-  resetPassword,
   login,
   me,
   refresh

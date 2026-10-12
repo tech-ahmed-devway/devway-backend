@@ -4,25 +4,27 @@ const env = require('../config/env');
 
 let transporter = null;
 
+const isConfigured = () => {
+  const { user, pass } = env.smtp;
+  return Boolean(user && pass);
+};
+
 const getTransporter = () => {
   if (transporter) return transporter;
 
   const { host, port, user, pass } = env.smtp;
 
   if (user && pass) {
-    if (host.includes('gmail')) {
-      transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: { user, pass }
-      });
-    } else {
-      transporter = nodemailer.createTransport({
-        host,
-        port: Number(port) || 465,
-        secure: Number(port) === 465,
-        auth: { user, pass }
-      });
-    }
+    const isGmail = host.includes('gmail');
+    transporter = nodemailer.createTransport({
+      host: isGmail ? 'smtp.gmail.com' : host,
+      port: Number(port) || 465,
+      secure: Number(port) === 465,
+      pool: true,
+      maxConnections: 5,
+      maxMessages: 100,
+      auth: { user, pass }
+    });
   }
 
   return transporter;
@@ -323,6 +325,7 @@ const sendAssignmentGradedEmail = async ({ email, name, assignmentTitle, grade, 
 };
 
 module.exports = {
+  isConfigured,
   sendVerificationEmail,
   sendPasswordResetEmail,
   sendAssignmentGradedEmail

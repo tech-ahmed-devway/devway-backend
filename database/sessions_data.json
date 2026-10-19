@@ -1,0 +1,52 @@
+{
+  "settings": {
+    "mainDriveFolder": {
+      "url": "https://drive.google.com/drive/folders/1onqpotGJh5VmOEf708S3e2btli6rCI1H?usp=sharing",
+      "folderId": "1onqpotGJh5VmOEf708S3e2btli6rCI1H",
+      "title": "مجلد السيشنات الرئيسي على Google Drive",
+      "description": "المجلد المباشر لجميع المحاضرات والسيشنات المسجلة لمسار Frontend",
+      "isPublic": true,
+      "updatedAt": "2026-10-19T18:00:00.000Z"
+    }
+  },
+  "sessions": [
+    {
+      "id": 1,
+      "session_number": "1",
+      "title": "Session 1: مقدمة في الويب ودورة حياة الإنترنت و HTML5",
+      "description": "شرح شامل ومفصل لرحلة البيانات عبر الإنترنت (DNS, TCP, HTTP)، وكيف يتواصل المتصفح مع السيرفر، مع بداية عملية في هيكلة صفحات الويب باستخدام HTML5 والوسوم الدلالية Semantic HTML.",
+      "video_url": "https://drive.google.com/drive/folders/1onqpotGJh5VmOEf708S3e2btli6rCI1H?usp=sharing",
+      "drive_folder_url": "https://drive.google.com/drive/folders/1onqpotGJh5VmOEf708S3e2btli6rCI1H?usp=sharing",
+      "duration": "1:45:00",
+      "order_index": 1,
+      "topics": [
+        "How The Internet & Web Work",
+        "Client-Server Architecture & DNS",
+        "HTTP/HTTPS Request-Response Lifecycle",
+        "HTML5 Semantic Elements & Structure",
+        "VS Code & Developer Extensions Setup"
+      ],
+      "resources": [
+        {
+          "title": "مجلد السيشن على Google Drive",
+          "url": "https://drive.google.com/drive/folders/1onqpotGJh5VmOEf708S3e2btli6rCI1H?usp=sharing",
+          "type": "drive"
+        },
+        {
+          "title": "عرض السلايدات (Internet LifeCycle)",
+          "url": "https://uivwfroflmhvepxlusws.supabase.co/storage/v1/object/public/attachments/69250ffa-7ce8-4f45-be6e-05844211ed76-1792390467549.pdf",
+          "type": "slides"
+        },
+        {
+          "title": "دليل MDN Web Docs - مبادئ الويب",
+          "url": "https://developer.mozilla.org/en-US/docs/Learn_web_development/Getting_started/Web_standards/How_the_web_works",
+          "type": "link"
+        }
+      ],
+      "notes": "تأكد من تنزيل وتثبيت بيئة العمل ومتابعة التطبيق العملي للوسوم الدلالية المذكورة في المحاضرة.",
+      "is_published": true,
+      "created_at": "2026-10-19T06:00:00.000Z",
+      "updated_at": "2026-10-19T06:00:00.000Z"
+    }
+  ]
+}

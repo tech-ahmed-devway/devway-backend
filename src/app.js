@@ -16,6 +16,7 @@ const examsRoutes = require("./modules/exams/exams.routes");
 const questionsRoutes = require("./modules/questions/questions.routes");
 const attachmentsRoutes = require("./modules/attachments/attachments.routes");
 const assignmentsRoutes = require("./modules/assignments/assignments.routes");
+const sessionsRoutes = require("./modules/sessions/sessions.routes");
 
 const app = express();
 
@@ -134,6 +135,8 @@ app.use("/api", questionsRoutes);
 app.use("/api/attachments", attachmentsRoutes);
 
 app.use("/api/assignments", assignmentsRoutes);
+
+app.use("/api/sessions", sessionsRoutes);
 
 /* =========================================================
    404 - ROUTE NOT FOUND

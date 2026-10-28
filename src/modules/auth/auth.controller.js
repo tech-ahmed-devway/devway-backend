@@ -214,9 +214,57 @@ const refresh = async (req, res, next) => {
   }
 };
 
+/**
+ * Verify if email exists for forgot password
+ */
+const forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const user = await authService.findUserByEmail(normalizedEmail);
+    if (!user) {
+      return next(new AppError('البريد الإلكتروني غير مسجل لدينا', 404));
+    }
+
+    return new ApiResponse(200, {
+      email: user.email,
+      full_name: user.full_name
+    }, 'البريد الإلكتروني موجود، يمكنك تعيين كلمة مرور جديدة').send(res);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Reset password
+ */
+const resetPassword = async (req, res, next) => {
+  try {
+    const { email, new_password } = req.body;
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const user = await authService.findUserByEmail(normalizedEmail);
+    if (!user) {
+      return next(new AppError('البريد الإلكتروني غير مسجل لدينا', 404));
+    }
+
+    const saltRounds = 12;
+    const passwordHash = await bcrypt.hash(new_password, saltRounds);
+
+    await authService.updateUserPassword(normalizedEmail, passwordHash);
+
+    return new ApiResponse(200, null, 'تم تغيير كلمة المرور بنجاح. يمكنك تسجيل الدخول الآن').send(res);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   register,
   login,
   me,
-  refresh
+  refresh,
+  forgotPassword,
+  resetPassword
 };

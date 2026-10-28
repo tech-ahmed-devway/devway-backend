@@ -17,6 +17,8 @@ const router = express.Router();
 // Clean Auth Endpoints
 router.post('/register', validate(registerSchema), authController.register);
 router.post('/login', validate(loginSchema), authController.login);
+router.post('/forgot-password', validate(forgotPasswordSchema), authController.forgotPassword);
+router.post('/reset-password', validate(resetPasswordSchema), authController.resetPassword);
 router.get('/me', auth, authController.me);
 router.post('/refresh', authController.refresh);
 

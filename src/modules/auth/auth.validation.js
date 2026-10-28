@@ -66,10 +66,8 @@ const resetPasswordSchema = Joi.object({
     'string.empty': 'البريد الإلكتروني مطلوب',
     'any.required': 'البريد الإلكتروني مطلوب'
   }),
-  code: Joi.string().trim().length(6).required().messages({
-    'string.length': 'رمز التحقق يجب أن يتكون من 6 أرقام',
-    'string.empty': 'رمز التحقق مطلوب',
-    'any.required': 'رمز التحقق مطلوب'
+  code: Joi.string().trim().length(6).optional().allow('', null).messages({
+    'string.length': 'رمز التحقق يجب أن يتكون من 6 أرقام'
   }),
   new_password: Joi.string().min(6).required().messages({
     'string.min': 'كلمة المرور الجديدة يجب ألا تقل عن 6 أحرف',

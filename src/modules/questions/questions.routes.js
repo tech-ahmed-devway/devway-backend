@@ -3,12 +3,15 @@ const express = require('express');
 const questionsController = require('./questions.controller');
 const { auth, authorize } = require('../../middleware/auth');
 const validate = require('../../middleware/validate');
-const { questionSchema } = require('./questions.validation');
+const { questionSchema, bulkQuestionsSchema } = require('./questions.validation');
 
 const router = express.Router();
 
 // Retrieve questions for a specific exam (All authenticated users)
 router.get('/exams/:examId/questions', auth, questionsController.getQuestions);
+
+// Bulk create questions for an exam (Admin only)
+router.post('/exams/:examId/questions/bulk', auth, authorize('admin'), validate(bulkQuestionsSchema), questionsController.createBulkQuestions);
 
 // Create a new question (Admin only)
 router.post('/questions', auth, authorize('admin'), validate(questionSchema), questionsController.createQuestion);

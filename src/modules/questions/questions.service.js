@@ -147,9 +147,54 @@ const deleteQuestion = async (id) => {
   return data;
 };
 
+/**
+ * Bulk create questions for an exam
+ * @param {number} examId
+ * @param {Array<object>} questions
+ * @returns {Promise<object>}
+ */
+const createBulkQuestions = async (examId, questions) => {
+  // Validate exam existence
+  const { data: exam, error: examErr } = await supabase
+    .from('exams')
+    .select('id')
+    .eq('id', examId)
+    .maybeSingle();
+
+  if (examErr) throw examErr;
+  if (!exam) {
+    throw new AppError('الاختبار غير موجود', 404);
+  }
+
+  // Format records with exam_id
+  const records = questions.map((q) => ({
+    exam_id: examId,
+    content: q.content,
+    option_a: q.option_a,
+    option_b: q.option_b,
+    option_c: q.option_c || null,
+    option_d: q.option_d || null,
+    correct_option: q.correct_option.toLowerCase(),
+  }));
+
+  const { data, error } = await supabase
+    .from('questions')
+    .insert(records)
+    .select('*');
+
+  if (error) throw error;
+
+  return {
+    success: true,
+    count: data.length,
+    questions: data
+  };
+};
+
 module.exports = {
   getQuestionsByExamId,
   createQuestion,
+  createBulkQuestions,
   updateQuestion,
   deleteQuestion
 };

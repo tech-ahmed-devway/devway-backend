@@ -51,6 +51,21 @@ const updateQuestion = async (req, res, next) => {
 };
 
 /**
+ * Bulk create questions for an exam (Admin only)
+ */
+const createBulkQuestions = async (req, res, next) => {
+  try {
+    const { examId } = req.params;
+    const { questions } = req.body;
+
+    const result = await questionsService.createBulkQuestions(Number(examId), questions);
+    return res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Delete a question (Admin only)
  */
 const deleteQuestion = async (req, res, next) => {
@@ -71,6 +86,7 @@ const deleteQuestion = async (req, res, next) => {
 module.exports = {
   getQuestions,
   createQuestion,
+  createBulkQuestions,
   updateQuestion,
   deleteQuestion
 };

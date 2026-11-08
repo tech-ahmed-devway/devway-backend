@@ -32,6 +32,39 @@ const questionSchema = Joi.object({
   })
 });
 
+const bulkQuestionsSchema = Joi.object({
+  questions: Joi.array()
+    .items(
+      Joi.object({
+        content: Joi.string().trim().required().messages({
+          'string.empty': 'محتوى السؤال مطلوب',
+          'any.required': 'محتوى السؤال مطلوب'
+        }),
+        option_a: Joi.string().trim().required().messages({
+          'string.empty': 'الخيار (أ) مطلوب',
+          'any.required': 'الخيار (أ) مطلوب'
+        }),
+        option_b: Joi.string().trim().required().messages({
+          'string.empty': 'الخيار (ب) مطلوب',
+          'any.required': 'الخيار (ب) مطلوب'
+        }),
+        option_c: Joi.string().trim().allow('', null).optional(),
+        option_d: Joi.string().trim().allow('', null).optional(),
+        correct_option: Joi.string().length(1).valid('a', 'b', 'c', 'd').required().messages({
+          'any.only': 'الخيار الصحيح يجب أن يكون a أو b أو c أو d',
+          'any.required': 'الخيار الصحيح مطلوب'
+        })
+      })
+    )
+    .min(1)
+    .required()
+    .messages({
+      'array.min': 'يجب توفير سؤال واحد على الأقل للاستيراد',
+      'any.required': 'قائمة الأسئلة مطلوبة'
+    })
+});
+
 module.exports = {
-  questionSchema
+  questionSchema,
+  bulkQuestionsSchema
 };

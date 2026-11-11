@@ -3,8 +3,21 @@ const supabase = require('../../config/supabase');
 const storageService = require('../../services/storage.service');
 const emailService = require('../../services/email.service');
 const AppError = require('../../utils/AppError');
-const archiver = require('archiver');
+const archiverModule = require('archiver');
 const path = require('path');
+
+const createZipArchive = (options = { zlib: { level: 5 } }) => {
+  if (archiverModule.ZipArchive) {
+    return new archiverModule.ZipArchive(options);
+  }
+  if (typeof archiverModule === 'function') {
+    return archiverModule('zip', options);
+  }
+  if (archiverModule.default && typeof archiverModule.default === 'function') {
+    return archiverModule.default('zip', options);
+  }
+  throw new Error('فشل تهيئة أداة ضغط الملفات ZIP');
+};
 
 // =========================================================================
 // ASSIGNMENT TEMPLATES SERVICES
@@ -1677,7 +1690,7 @@ const downloadAllSubmissions = async (assignmentId, res) => {
   );
 
   // 6. Create archive and pipe to response
-  const archive = archiver('zip', { zlib: { level: 5 } });
+  const archive = createZipArchive({ zlib: { level: 5 } });
 
   return new Promise((resolve, reject) => {
     archive.on('error', (err) => {

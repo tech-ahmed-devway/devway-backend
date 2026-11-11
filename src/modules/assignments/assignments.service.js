@@ -3,6 +3,8 @@ const supabase = require('../../config/supabase');
 const storageService = require('../../services/storage.service');
 const emailService = require('../../services/email.service');
 const AppError = require('../../utils/AppError');
+const archiver = require('archiver');
+const path = require('path');
 
 // =========================================================================
 // ASSIGNMENT TEMPLATES SERVICES
@@ -1595,6 +1597,211 @@ async function triggerNotificationsForSubmission(submission, isLate) {
   }
 }
 
+// =========================================================================
+// DOWNLOAD ALL SUBMISSIONS AS ZIP
+// =========================================================================
+
+const downloadAllSubmissions = async (assignmentId, res) => {
+  // 1. Verify assignment exists
+  const { data: assignment, error: assignErr } = await supabase
+    .from('assignments')
+    .select('id, title')
+    .eq('id', assignmentId)
+    .maybeSingle();
+
+  if (assignErr) throw assignErr;
+  if (!assignment) throw new AppError('الواجب المطلوب غير موجود', 404);
+
+  // 2. Get all submissions with student names (exclude drafts)
+  const { data: subs, error: subsErr } = await supabase
+    .from('assignment_submissions')
+    .select(`
+      id, user_id, status, grade, feedback, graded_at, created_at, updated_at,
+      profiles:user_id (full_name, email)
+    `)
+    .eq('assignment_id', assignmentId)
+    .neq('status', 'draft');
+
+  if (subsErr) throw subsErr;
+  if (!subs || subs.length === 0) {
+    throw new AppError('لا توجد تسليمات لهذا الواجب بعد', 404);
+  }
+
+  // 3. Get all attempts for these submissions
+  const submissionIds = subs.map(s => s.id);
+  const { data: attempts, error: attErr } = await supabase
+    .from('assignment_submission_attempts')
+    .select('id, submission_id, attempt_number, text_answer, created_at, submitted_at')
+    .in('submission_id', submissionIds)
+    .order('attempt_number', { ascending: false });
+
+  if (attErr) throw attErr;
+
+  // 4. Get all files from those attempts
+  const attemptIds = (attempts || []).map(a => a.id);
+  let filesData = [];
+  if (attemptIds.length > 0) {
+    const { data: fData, error: fErr } = await supabase
+      .from('assignment_submission_files')
+      .select('id, attempt_id, original_name, url')
+      .in('attempt_id', attemptIds);
+    if (fErr) throw fErr;
+    filesData = fData || [];
+  }
+
+  // Build lookup maps
+  const attemptsBySubmission = new Map();
+  (attempts || []).forEach(att => {
+    if (!attemptsBySubmission.has(att.submission_id)) {
+      attemptsBySubmission.set(att.submission_id, []);
+    }
+    attemptsBySubmission.get(att.submission_id).push(att);
+  });
+
+  const filesByAttempt = new Map();
+  filesData.forEach(f => {
+    if (!filesByAttempt.has(f.attempt_id)) {
+      filesByAttempt.set(f.attempt_id, []);
+    }
+    filesByAttempt.get(f.attempt_id).push(f);
+  });
+
+  // 5. Set response headers for zip download
+  const safeTitle = (assignment.title || 'assignment')
+    .replace(/[/\\?%*:|"<>]/g, '_')
+    .trim();
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="${encodeURIComponent(safeTitle)}_submissions.zip"; filename*=UTF-8''${encodeURIComponent(safeTitle + '_submissions.zip')}`
+  );
+
+  // 6. Create archive and pipe to response
+  const archive = archiver('zip', { zlib: { level: 5 } });
+
+  return new Promise((resolve, reject) => {
+    archive.on('error', (err) => {
+      reject(err);
+    });
+
+    res.on('finish', () => {
+      resolve();
+    });
+
+    archive.pipe(res);
+
+    (async () => {
+      try {
+        const usedFolderNames = new Map();
+
+        const statusMap = {
+          submitted: 'تم التسليم',
+          late: 'تسليم متأخر',
+          under_review: 'قيد المراجعة',
+          returned: 'معاد للمراجعة',
+          graded: 'تم التصحيح',
+          draft: 'مسودة',
+        };
+
+        for (const sub of subs) {
+          const rawName = (sub.profiles?.full_name || sub.profiles?.email || `student_${sub.user_id}`).trim();
+          const cleanName = rawName.replace(/[/\\?%*:|"<>]/g, '_').trim() || 'student';
+
+          // Handle duplicate student names
+          let folderName = cleanName;
+          if (usedFolderNames.has(cleanName)) {
+            const count = usedFolderNames.get(cleanName) + 1;
+            usedFolderNames.set(cleanName, count);
+            folderName = `${cleanName}_${count}`;
+          } else {
+            usedFolderNames.set(cleanName, 1);
+          }
+
+          const subAttempts = attemptsBySubmission.get(sub.id) || [];
+          const latestAttempt = subAttempts[0];
+
+          const submissionDate = latestAttempt?.submitted_at || latestAttempt?.created_at || sub.updated_at || sub.created_at;
+
+          // Student summary file
+          const infoLines = [
+            `اسم الطالب: ${sub.profiles?.full_name || 'غير محدد'}`,
+            `البريد الإلكتروني: ${sub.profiles?.email || 'غير محدد'}`,
+            `حالة التسليم: ${statusMap[sub.status] || sub.status}`,
+            `العلامة: ${sub.grade !== null && sub.grade !== undefined ? sub.grade : 'معلق لم يتم التصحيح'}`,
+            `ملاحظات المدرس: ${sub.feedback || 'لا توجد ملاحظات'}`,
+            `رقم المحاولة: ${latestAttempt?.attempt_number || 1}`,
+            `تاريخ التسليم: ${submissionDate ? new Date(submissionDate).toLocaleString('ar-EG') : 'غير متوفر'}`,
+          ];
+
+          archive.append(`\uFEFF${infoLines.join('\r\n')}\r\n`, { name: `${folderName}/student_info.txt` });
+
+          if (!latestAttempt) continue;
+
+          // Add text answer if present
+          if (latestAttempt.text_answer && latestAttempt.text_answer.trim().length > 0) {
+            archive.append(`\uFEFF${latestAttempt.text_answer}`, { name: `${folderName}/answer.txt` });
+          }
+
+          const attFiles = filesByAttempt.get(latestAttempt.id) || [];
+          const usedFileNames = new Set(['student_info.txt', 'answer.txt']);
+
+          for (const file of attFiles) {
+            try {
+              let buffer = null;
+
+              // 1. Try direct HTTP fetch
+              if (file.url && (file.url.startsWith('http://') || file.url.startsWith('https://'))) {
+                try {
+                  const response = await fetch(file.url);
+                  if (response.ok) {
+                    buffer = Buffer.from(await response.arrayBuffer());
+                  }
+                } catch (netErr) {
+                  // Direct fetch failed, fallback below
+                }
+              }
+
+              // 2. Fallback to Supabase Storage SDK download
+              if (!buffer && file.url) {
+                const fileNameInBucket = storageService.getFileNameFromUrl(file.url);
+                if (fileNameInBucket) {
+                  const { data: blob, error: dlErr } = await supabase.storage.from('attachments').download(fileNameInBucket);
+                  if (!dlErr && blob) {
+                    buffer = Buffer.from(await blob.arrayBuffer());
+                  }
+                }
+              }
+
+              if (buffer) {
+                let fileName = file.original_name ? file.original_name.replace(/[/\\?%*:|"<>]/g, '_').trim() : `file_${file.id}`;
+                if (usedFileNames.has(fileName)) {
+                  const ext = path.extname(fileName);
+                  const base = path.basename(fileName, ext);
+                  let counter = 2;
+                  while (usedFileNames.has(`${base}_${counter}${ext}`)) {
+                    counter++;
+                  }
+                  fileName = `${base}_${counter}${ext}`;
+                }
+                usedFileNames.add(fileName);
+
+                archive.append(buffer, { name: `${folderName}/${fileName}` });
+              }
+            } catch (downloadErr) {
+              console.error(`Failed to download file ${file.id}:`, downloadErr);
+            }
+          }
+        }
+
+        await archive.finalize();
+      } catch (err) {
+        archive.destroy();
+        reject(err);
+      }
+    })();
+  });
+};
+
 module.exports = {
   // Templates
   getAllTemplates,
@@ -1637,5 +1844,8 @@ module.exports = {
   markNotificationsAsRead,
 
   // Scheduler
-  runSchedulerSync
+  runSchedulerSync,
+
+  // Downloads
+  downloadAllSubmissions
 };

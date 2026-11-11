@@ -38,6 +38,9 @@ router.delete('/:id/permanent', authorize('admin'), assignmentsController.perman
 // Get list of all submissions for this assignment (Admin only)
 router.get('/:id/submissions', authorize('admin'), assignmentsController.getSubmissionsForAssignment);
 
+// Download all submissions as a ZIP file (Admin only)
+router.get('/:id/submissions/download-zip', authorize('admin'), assignmentsController.downloadAllSubmissions);
+
 // Student saves draft or finally submits assignment
 router.post('/:id/submissions/draft', authorize('user'), upload.array('files'), assignmentsController.saveDraftSubmission);
 router.post('/:id/submissions/submit', authorize('user'), upload.array('files'), assignmentsController.finalizeSubmission);

@@ -55,6 +55,8 @@ app.use(
       "X-Requested-With",
       "Accept",
     ],
+
+    exposedHeaders: ["Content-Disposition"],
   }),
 );
 

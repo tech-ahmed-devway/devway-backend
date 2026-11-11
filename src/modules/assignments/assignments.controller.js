@@ -434,6 +434,20 @@ const markNotificationsRead = async (req, res) => {
   }
 };
 
+const downloadAllSubmissions = async (req, res) => {
+  try {
+    await assignmentsService.downloadAllSubmissions(req.params.id, res);
+  } catch (err) {
+    // If headers already sent (streaming started), we can't send a JSON error
+    if (res.headersSent) {
+      console.error('Download zip stream error:', err);
+      res.end();
+      return;
+    }
+    return handleError(res, err);
+  }
+};
+
 module.exports = {
   // Templates
   getAllTemplates,
@@ -470,5 +484,8 @@ module.exports = {
   // Stats & Notifications
   getDashboardStats,
   getUserNotifications,
-  markNotificationsRead
+  markNotificationsRead,
+
+  // Downloads
+  downloadAllSubmissions
 };
